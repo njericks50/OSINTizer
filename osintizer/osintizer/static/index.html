@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSINTizer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Cpath d='M8 10l6 6-6 6' stroke='%23367bf0' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 22h8' stroke='%2300d9a3' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">&gt;_</span>
+      <span class="word">OSINT<b>izer</b></span>
+    </div>
+    <div class="case-picker">
+      <label for="caseSelect" class="sr">Case</label>
+      <select id="caseSelect"></select>
+      <button class="btn ghost" id="newCaseBtn" title="New case">+ New case</button>
+    </div>
+    <div class="top-actions">
+      <div class="menu">
+        <button class="btn ghost" id="exportBtn">Export ▾</button>
+        <div class="menu-list" id="exportMenu" hidden>
+          <a data-fmt="md">Report (.md) — in scope</a>
+          <a data-fmt="md-all">Report (.md) — everything</a>
+          <a data-fmt="csv">Findings (.csv)</a>
+          <a data-fmt="json">Case backup (.json)</a>
+          <hr>
+          <a id="importCaseLink">Import case backup…</a>
+        </div>
+      </div>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="findings" role="tab">Findings <span class="pill" id="findCount">0</span></button>
+    <button class="tab" data-tab="collectors" role="tab">Collectors <span class="pill live" id="liveCount" hidden>0</span></button>
+    <button class="tab" data-tab="case" role="tab">Case &amp; Notes</button>
+  </nav>
+
+  <main>
+    <!-- ======================= WELCOME ======================= -->
+    <section id="welcome" class="panel welcome" hidden>
+      <h1>Start a case</h1>
+      <p>A case holds everything for one engagement: the collectors you run, their raw output, and the findings OSINTizer pulls out of them — grouped automatically.</p>
+      <form id="welcomeForm" class="form-grid">
+        <label>Case name<input name="name" required placeholder="Acme Corp external recon"></label>
+        <label>Primary target<input name="target" placeholder="acme.com"></label>
+        <label class="span2">In-scope domains <span class="hint">comma separated — anything else is marked out-of-scope</span><input name="scope" placeholder="acme.com, acme.io"></label>
+        <button class="btn primary span2" type="submit">Create case</button>
+      </form>
+    </section>
+
+    <!-- ======================= FINDINGS ======================= -->
+    <section id="tab-findings" class="tabpanel">
+      <div class="chips" id="chips"></div>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Filter findings…  (value, detail, notes, source)">
+        <select id="statusFilter">
+          <option value="">Any status</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="starOnly"> ★ only</label>
+        <label class="toggle"><input type="checkbox" id="showOos"> Out of scope <span class="muted" id="oosCount"></span></label>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="collapseAll">Collapse all</button>
+        <button class="btn" id="addFindingBtn">+ Add finding</button>
+      </div>
+      <form id="addFindingForm" class="inline-form" hidden>
+        <select name="category" id="addCategory"></select>
+        <input name="value" placeholder="Value" required>
+        <input name="detail" placeholder="Detail (optional)">
+        <button class="btn primary" type="submit">Add</button>
+        <button class="btn ghost" type="button" id="cancelAdd">Cancel</button>
+      </form>
+      <div id="groups"></div>
+      <div id="emptyFindings" class="empty" hidden>
+        <div class="empty-mark">&gt;_</div>
+        <h2>No findings yet</h2>
+        <p>Run a collector or paste tool output on the <a href="#" data-goto="collectors">Collectors</a> tab. Results are filed here automatically, grouped into emails, users, domains, subdomains, IPs and more.</p>
+      </div>
+    </section>
+
+    <!-- ======================= COLLECTORS ======================= -->
+    <section id="tab-collectors" class="tabpanel" hidden>
+      <div class="target-bar">
+        <div class="target-input">
+          <input id="targetInput" placeholder="Target — domain, email, username, IP, CIDR or URL" autocomplete="off" spellcheck="false">
+          <span class="type-badge" id="targetType">—</span>
+        </div>
+        <label class="toggle" title="Active collectors send traffic straight to the target"><input type="checkbox" id="allowActive"> Allow active collectors</label>
+        <button class="btn primary" id="runAllBtn" disabled>Run all passive</button>
+      </div>
+
+      <p class="muted small safe-note">Network-safe mode: collectors run one at a time in a queue with rate limits, so recon traffic stays gentle on your router/firewall. "Run all" only uses passive collectors.</p>
+      <div class="collector-layout">
+        <div>
+          <div class="grid" id="collectorGrid"></div>
+
+          <details class="panel paste" id="pastePanel">
+            <summary><b>Paste tool output</b> <span class="muted">— ran something in your own terminal? Drop the output here and it's filed into Findings.</span></summary>
+            <form id="pasteForm">
+              <div class="row">
+                <select name="tool" id="pasteTool"><option value="auto">Auto-detect tool</option></select>
+                <input name="target" placeholder="Target it was run against (optional)">
+                <input name="label" placeholder="Label (optional)">
+              </div>
+              <textarea name="text" rows="9" placeholder="Paste raw output from theHarvester, sherlock, dig, whois, nmap, amass, subfinder … or any text." spellcheck="false"></textarea>
+              <div class="row end">
+                <label class="btn ghost file-btn">Load file…<input type="file" id="pasteFile" hidden></label>
+                <button class="btn primary" type="submit">Extract to Findings</button>
+              </div>
+            </form>
+          </details>
+        </div>
+
+        <aside class="panel runs">
+          <div class="runs-head">
+            <h3>Runs</h3>
+            <span class="muted" id="runsSummary"></span>
+          </div>
+          <ul id="runList"></ul>
+        </aside>
+      </div>
+
+      <div class="console" id="console" hidden>
+        <div class="console-head">
+          <span id="consoleTitle"></span>
+          <span class="spacer"></span>
+          <button class="btn ghost sm" id="consoleCancel" hidden>Stop</button>
+          <button class="btn ghost sm" id="consoleDelete">Delete run</button>
+          <button class="btn ghost sm" id="consoleClose">Close</button>
+        </div>
+        <div class="console-cmd" id="consoleCmd"></div>
+        <pre id="consoleOut"></pre>
+      </div>
+    </section>
+
+    <!-- ======================= CASE ======================= -->
+    <section id="tab-case" class="tabpanel" hidden>
+      <form id="caseForm" class="panel form-grid">
+        <label>Case name<input name="name" required></label>
+        <label>Primary target<input name="target"></label>
+        <label class="span2">In-scope domains <span class="hint">comma separated; changing this re-checks every finding</span><input name="scope"></label>
+        <label class="span2">Analyst notes <span class="hint">saved automatically, included in the report</span><textarea name="notes" rows="12"></textarea></label>
+        <div class="span2 row between">
+          <span class="muted" id="caseSaved"></span>
+          <div class="row">
+            <button class="btn danger" type="button" id="deleteCase">Delete case</button>
+            <button class="btn primary" type="submit">Save</button>
+          </div>
+        </div>
+      </form>
+      <p class="muted small" id="dbPath"></p>
+    </section>
+  </main>
+
+  <dialog id="newCaseDialog">
+    <form method="dialog" id="newCaseForm" class="form-grid">
+      <h2 class="span2">New case</h2>
+      <label>Case name<input name="name" required></label>
+      <label>Primary target<input name="target" placeholder="acme.com"></label>
+      <label class="span2">In-scope domains<input name="scope" placeholder="acme.com, acme.io"></label>
+      <div class="span2 row end">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="ok">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

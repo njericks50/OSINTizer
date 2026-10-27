@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osintizer"
+version = "1.0.0"
+description = "Collect, auto-extract and organize OSINT recon findings on Kali Linux"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+classifiers = [
+  "Environment :: Web Environment",
+  "Intended Audience :: Information Technology",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+
+[project.scripts]
+osintizer = "osintizer.cli:main"
+
+[tool.setuptools]
+packages = ["osintizer"]
+
+[tool.setuptools.package-data]
+osintizer = ["static/*"]
